@@ -1,28 +1,417 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8">
-  <title>Video Background Preview</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
+
+(() => {
+  'use strict';
+  if (window.__ZALO_AVATAR_OVERLAY_INSTALLED) return;
+  window.__ZALO_AVATAR_OVERLAY_INSTALLED = true;
+
+  const CONFIG = {
+    TARGET_TITLE: "lê tuấn tú",
+    MAIN_AVATAR: "https://media.tenor.com/ZRHVn5t3nm4AAAAj/sataniasalaught.gif",
+    OVERLAY: "https://img.avatardecoration.com/decorations/sakura_warrior.png",
+    OFFSET_X: 0,
+    OFFSET_Y: 0,
+    SCALE: 1.0,
+    LOG_INTERVAL: 700,
+  };
+
+  /* Fake log */
+  function fakeLog() {
+    if (document.getElementById('__fakeHackLogContainer')) return;
+    const logs = [
+      "[ZaloGuard] Firewall detected ⚠️",
+      "[OverlayHack] Avatar replacement initialized...",
+      "[System] All protections neutralized ✅",
+      "[natura] đang tải tài nguyên...",
+      "[natura] tìm avatar target...",
+      "[natura] áp dụng overlay thành công",
+      "[info] Nếu không thấy avatar, kiểm tra selector",
+      "[done] Script stable ✨",
+      "[natura] nêu ghi chat='on' thì bật chức ăng  ",
+    ];
+    const box = document.createElement('div');
+    box.id = '__fakeHackLogContainer';
+    box.style.cssText = `
+      position: fixed; bottom: 20px; right: 20px; width: 340px;
+      background: rgba(0,0,0,0.78); color: #b7f5b7; font-family: monospace;
+      font-size: 13px; padding: 10px; border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0,255,0,0.12); z-index: 2147483647;
+    `;
+    const head = document.createElement('div');
+    head.innerHTML = `<span style="font-weight:700;color:#9ef2a6;">DEBUG LOG</span>
+                      <button id="closeLog" style="float:right;background:none;border:0;color:#9ef2a6;cursor:pointer">✕</button>`;
+    box.appendChild(head);
+    document.body.appendChild(box);
+    box.querySelector('#closeLog').onclick = () => box.remove();
+    let i = 0;
+    const timer = setInterval(() => {
+      if (i >= logs.length) return clearInterval(timer);
+      const line = document.createElement('div');
+      line.textContent = logs[i++];
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    }, CONFIG.LOG_INTERVAL);
+  }
+
+  /* Utilities */
+  function normalize(s = '') {
+    return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+  function findInput() {
+    return document.querySelector('textarea, [contenteditable="true"], input[type="text"]');
+  }
+
+  /* Avatar overlay (works if you pass an <img> or a container that has an <img>) */
+  function applyOverlayToContainer(container) {
+    try {
+      if (!container) return false;
+      // support both passing an <img> element or a container that contains an <img>
+      let img = null;
+      if (container.tagName && container.tagName.toLowerCase() === 'img') img = container;
+      else img = (container.querySelector && container.querySelector('img')) || null;
+      if (!img) return false;
+      // already wrapped?
+      if (img.closest && img.closest('.avatar-wrap[data-overlay="1"]')) return false;
+
+      const rect = img.getBoundingClientRect();
+      const w = Math.max(24, Math.round(rect.width) || img.width || 48);
+      const h = Math.max(24, Math.round(rect.height) || img.height || 48);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'avatar-wrap';
+      wrap.setAttribute('data-overlay', '1');
+      wrap.style.cssText = `position:relative;display:inline-block;width:${w}px;height:${h}px;border-radius:50%;overflow:hidden;`;
+
+      const mainImg = document.createElement('img');
+      mainImg.className = 'avatar-main';
+      mainImg.src = CONFIG.MAIN_AVATAR;
+      mainImg.style.cssText = `width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;`;
+
+      const overlayImg = document.createElement('img');
+      overlayImg.className = 'avatar-overlay';
+      overlayImg.src = CONFIG.OVERLAY;
+      overlayImg.style.cssText = `
+        position:absolute;top:${CONFIG.OFFSET_Y}px;left:${CONFIG.OFFSET_X}px;
+        width:${CONFIG.SCALE * 100}%;height:${CONFIG.SCALE * 100}%;
+        border-radius:50%;object-fit:cover;pointer-events:none;display:block;
+      `;
+
+      wrap.appendChild(mainImg);
+      wrap.appendChild(overlayImg);
+
+      if (img.parentNode) img.parentNode.replaceChild(wrap, img);
+      else container.appendChild(wrap);
+      return true;
+    } catch (e) {
+      console.error('[AvatarOverlay] apply error', e);
+      return false;
     }
-    video {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+  }
+
+  function replaceAvatarByTitle() {
+    try {
+      const targetNorm = normalize(CONFIG.TARGET_TITLE);
+      const nodes = document.querySelectorAll('[title]');
+      for (const el of nodes) {
+        const title = el.getAttribute('title') || '';
+        if (normalize(title).includes(targetNorm)) {
+          let avatar = null;
+          try {
+            avatar = el.querySelector('.zavatar, .zavatar-container, img')
+                     || (el.closest && el.closest('div') && el.closest('div').querySelector('.zavatar, .zavatar-container, img'));
+          } catch (e) { avatar = null; }
+          if (!avatar) {
+            try {
+              avatar = el.closest && el.closest('li, div') && el.closest('li, div').querySelector('img');
+            } catch (e) { avatar = null; }
+          }
+          if (avatar && applyOverlayToContainer(avatar)) {
+            showBanner(`${title} đẹp zai 🌿`);
+            const log = document.getElementById('__fakeHackLogContainer');
+            if (log) { const l = document.createElement('div'); l.textContent = `[AvatarOverlay] replaced avatar for ${title}`; log.appendChild(l); log.scrollTop = log.scrollHeight; }
+          }
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function showBanner(text) {
+    try {
+      const id = '__ao_banner';
+      if (document.getElementById(id)) return;
+      const div = document.createElement('div');
+      div.id = id;
+      div.textContent = text;
+      div.style.cssText = `
+        position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.8);
+        background:rgba(0,0,0,0.7);color:#fff;font-size:28px;font-weight:700;padding:14px 26px;border-radius:14px;
+        z-index:999999;text-align:center;opacity:0;transition:all .35s ease;font-family:Segoe UI, sans-serif;
+      `;
+      document.body.appendChild(div);
+      requestAnimationFrame(() => { div.style.opacity = '1'; div.style.transform = 'translate(-50%,-50%) scale(1)'; });
+      setTimeout(() => { div.style.opacity = '0'; div.style.transform = 'translate(-50%,-50%) scale(0.8)'; setTimeout(()=>div.remove(),350); }, 2000);
+    } catch(e){}
+  }
+
+  /* Chat No Delay */
+  function initChatNoDelay() {
+    const input = findInput();
+    if (!input) {
+      setTimeout(initChatNoDelay, 700);
+      return;
     }
-  </style>
-</head>
-<body>
-  <video autoplay loop muted playsinline>
-    <source src="https://raw.githubusercontent.com/natura473/h-nh-n-n-zalo--/main/sachiro-dark-nights.3840x2160.mp4" type="video/mp4">
-  </video>
-</body>
-</html>
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const msg = input.value || input.textContent || '';
+        if (!msg.trim()) return;
+        const now = Date.now();
+        if (window.__lastSend && now - window.__lastSend < 80) return;
+        window.__lastSend = now;
+        const kd = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true });
+        input.dispatchEvent(kd);
+        if (input.tagName.toLowerCase() === 'textarea' || input.tagName.toLowerCase() === 'input') input.value = '';
+        else input.textContent = '';
+      }
+    }, true);
+    const log = document.getElementById('__fakeHackLogContainer');
+    if (log) { const l = document.createElement('div'); l.textContent = `[ChatNoDelay] active`; log.appendChild(l); log.scrollTop = log.scrollHeight; }
+  }
+
+  /* AutoChatSpam (single, fixed) */
+  const AutoChatSpam = (() => {
+    const state = {
+      active: false,
+      intervalId: null,
+      message: localStorage.getItem('autoChatMsg') || '💬 Natura test auto chat!',
+      delay: parseInt(localStorage.getItem('autoChatDelay') || '2000', 10),
+      posX: parseInt(localStorage.getItem('autoPanelX') || '20', 10),
+      posY: parseInt(localStorage.getItem('autoPanelY') || '130', 10),
+      visible: false
+    };
+
+    function sendInstant(msg) {
+      const input = findInput();
+      if (!input) return;
+      try {
+        if (input.tagName.toLowerCase() === 'textarea' || input.tagName.toLowerCase() === 'input') {
+          input.value = msg; input.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          input.focus(); input.innerText = msg; input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        const kd = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true });
+        input.dispatchEvent(kd);
+      } catch (e) {}
+    }
+
+    function start() {
+      stop();
+      state.intervalId = setInterval(() => sendInstant(state.message), Math.max(300, state.delay));
+      state.active = true; updateUI();
+      sendInstant(state.message);
+      logMsg(`[AutoChatSpam] START (${state.delay}ms)`);
+    }
+
+    function stop() {
+      if (state.intervalId) clearInterval(state.intervalId);
+      state.intervalId = null; state.active = false; updateUI();
+      logMsg(`[AutoChatSpam] STOP`);
+    }
+
+    function createPanel() {
+      if (document.getElementById('__autoChatPanel')) return;
+      const panel = document.createElement('div');
+      panel.id = '__autoChatPanel';
+      panel.style.cssText = `
+        position: fixed; left: ${state.posX}px; top: ${state.posY}px;
+        background: rgba(0,0,0,0.65); color: #0ff; font-family: monospace;
+        padding: 10px; border-radius: 10px; z-index: 2147483647;
+        width: 220px; cursor: move; display:none;
+      `;
+      panel.innerHTML = `
+        <div style="font-weight:bold;margin-bottom:6px;">🤖 Auto Chat Spam</div>
+        <label style="font-size:12px;">Nội dung:</label>
+        <input id="autoMsg" style="width:100%;margin-bottom:6px;background:rgba(255,255,255,0.08);color:#0ff;border:0;padding:4px;border-radius:6px;" value="${state.message}">
+        <label style="font-size:12px;">Delay (ms):</label>
+        <input id="autoDelay" type="number" min="300" style="width:100%;margin-bottom:6px;background:rgba(255,255,255,0.08);color:#0ff;border:0;padding:4px;border-radius:6px;" value="${state.delay}">
+        <button id="autoToggle" style="width:100%;padding:6px;margin-top:6px;border-radius:6px;background:#0ff;color:#000;border:0;cursor:pointer;">Bật tụ sam</button>
+      `;
+      document.body.appendChild(panel);
+
+      // Dragging
+      let dragging = false, offsetX = 0, offsetY = 0;
+      panel.addEventListener('mousedown', (e) => {
+        dragging = true;
+        offsetX = e.clientX - panel.offsetLeft;
+        offsetY = e.clientY - panel.offsetTop;
+      });
+      window.addEventListener('mouseup', () => { dragging = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const nx = e.clientX - offsetX;
+        const ny = e.clientY - offsetY;
+        panel.style.left = nx + 'px';
+        panel.style.top = ny + 'px';
+        try {
+          localStorage.setItem('autoPanelX', String(parseInt(nx, 10)));
+          localStorage.setItem('autoPanelY', String(parseInt(ny, 10)));
+        } catch (e) {}
+      });
+
+      const msgEl = panel.querySelector('#autoMsg');
+      const delayEl = panel.querySelector('#autoDelay');
+      const toggle = panel.querySelector('#autoToggle');
+
+      msgEl.addEventListener('input', e => {
+        state.message = e.target.value;
+        localStorage.setItem('autoChatMsg', state.message);
+      });
+      delayEl.addEventListener('input', e => {
+        state.delay = Math.max(300, parseInt(e.target.value || '1000', 10));
+        localStorage.setItem('autoChatDelay', String(state.delay));
+      });
+      toggle.addEventListener('click', () => state.active ? stop() : start());
+      updateUI();
+    }
+
+    function updateUI() {
+      const btn = document.querySelector('#autoToggle');
+      if (!btn) return;
+      if (state.active) {
+        btn.textContent = 'Tắt tụ sam';
+        btn.style.background = '#f33';
+        btn.style.color = '#fff';
+      } else {
+        btn.textContent = 'Bật tụ sam';
+        btn.style.background = '#0ff';
+        btn.style.color = '#000';
+      }
+    }
+
+    function setVisible(v) {
+      const panel = document.getElementById('__autoChatPanel');
+      if (!panel) return;
+      panel.style.display = v ? 'block' : 'none';
+      state.visible = v;
+      if (!v && state.active) stop();
+      logMsg(`[AutoChatSpam] visibility: ${v ? 'ON' : 'OFF'}`);
+    }
+
+    function logMsg(t) {
+      const log = document.getElementById('__fakeHackLogContainer');
+      if (log) { const l = document.createElement('div'); l.textContent = t; log.appendChild(l); log.scrollTop = log.scrollHeight; }
+    }
+
+    function init() {
+      createPanel();
+      setVisible(false); // default off
+      logMsg(`[AutoChatSpam] ready`);
+    }
+
+    // expose to global
+    window.__AutoChatSpam = { start, stop, setVisible, state };
+
+    return { init, start, stop, setVisible, state };
+  })();
+
+  /* Simple AutoTextBlack implementation (was missing) */
+  const AutoTextBlack = (() => {
+    function init() {
+      // Attempt to set message text color to black for incoming/outgoing messages
+      try {
+        if (!document.getElementById('__autoTextBlackStyles')) {
+          const st = document.createElement('style');
+          st.id = '__autoTextBlackStyles';
+          st.textContent = `
+            .chat-message .message-frame, .chat-message-list .message-frame { color: #000 !important; }
+          `;
+          document.head.appendChild(st);
+        }
+        const log = document.getElementById('__fakeHackLogContainer');
+        if (log) { const l = document.createElement('div'); l.textContent = `[AutoTextBlack] applied`; log.appendChild(l); log.scrollTop = log.scrollHeight; }
+      } catch (e) {}
+    }
+    return { init };
+  })();
+
+  /* Styles */
+  (function injectStyles() {
+    if (document.getElementById('__zalo_overlay_styles')) return;
+    const style = document.createElement('style');
+    style.id = '__zalo_overlay_styles';
+    style.textContent = `
+      .chat-message .message-frame {
+        border-radius: 20px !important;
+        background: url("https://th.bing.com/th/id/R.f0f4042e686690a32d8e04c59adee90c?rik=rmWX9ecVjAoexg&pid=ImgRaw&r=0") center/cover no-repeat !important;
+        color: #fff !important;
+        font-family: "Segoe UI", sans-serif !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      }
+      .chat-message-list {
+        background: url("https://th.bing.com/th/id/R.f0f4042e686690a32d8e04c59adee90c?rik=rmWX9ecVjAoexg&pid=ImgRaw&r=0") center/cover no-repeat fixed !important;
+      }
+      .avatar-wrap { box-sizing: border-box; }
+    `;
+    document.head.appendChild(style);
+  })();
+
+  /* init */
+  function initAll() {
+    fakeLog();
+    initChatNoDelay();
+    AutoChatSpam.init();
+    AutoTextBlack.init();
+    const mo = new MutationObserver(() => {
+      clearTimeout(window._zaloThrottle);
+      window._zaloThrottle = setTimeout(() => {
+        try { replaceAvatarByTitle(); } catch(e){/*ignore*/ }
+      }, 150);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    replaceAvatarByTitle();
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(initAll, 300);
+  else window.addEventListener('load', () => setTimeout(initAll, 300));
+
+  window.__ZALO_OVERLAY_API = {
+    replaceAvatar: replaceAvatarByTitle,
+    startAutoSpam: () => AutoChatSpam.start && AutoChatSpam.start(),
+    stopAutoSpam: () => AutoChatSpam.stop && AutoChatSpam.stop()
+  };
+
+  console.log('[ZaloOverlay v2.8.1] loaded');
+
+  /* ======= Console Command: chat='on' / chat='off' ======= */
+  Object.defineProperty(window, "chat", {
+    set(value) {
+      const panel = document.getElementById("__autoChatPanel");
+      const spamStart = window.__ZALO_OVERLAY_API?.startAutoSpam;
+      const spamStop = window.__ZALO_OVERLAY_API?.stopAutoSpam;
+
+      const lower = (String(value) || '').toLowerCase();
+      if (lower === "on") {
+        if (panel) {
+          panel.style.display = "block";
+          panel.style.pointerEvents = "auto";
+          panel.style.opacity = "1";
+        }
+        if (spamStart) spamStart();
+        console.log("%c[AutoChat] ON ✅ Panel visible & active", "color:lime;font-weight:bold");
+      } else if (lower === "off") {
+        if (spamStop) spamStop();
+        if (panel) {
+          panel.style.display = "none";
+          panel.style.pointerEvents = "none";
+          panel.style.opacity = "0";
+        }
+        console.log("%c[AutoChat] OFF ⛔ Panel hidden & disabled", "color:red;font-weight:bold");
+      } else {
+        console.log("%cUsage: chat = 'on' or chat = 'off'", "color:yellow");
+      }
+    },
+    get() {
+      return "[AutoChat controller → use chat='on' or chat='off']";
+    }
+  });
+
+})();
